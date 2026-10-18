@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+	<meta charset='UTF-8'>
+	<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+	<title>SVG Suite</title>
+	<link rel='stylesheet' href='styles.css'>
+</head>
+<body>
+	<div class='application-shell'>
+		<header class='top-bar'>
+			<nav class='tab-navigation' id='tabNavigation' role='tablist' aria-label='Tools'></nav>
+			<div class='global-actions'>
+				<span class='precision-indicator' id='precisionStatusBadge' title='100% Exact Rational (Q) — No Pi or irrational approximations used'>
+					<span id='precisionStatusIcon' data-icon='shield-check'></span>
+					<span id='precisionStatusText'>Exact Q</span>
+				</span>
+				<button type='button' class='icon-button' id='historyToggleButton' title='Local History' aria-label='Local History'>
+					<span data-icon='history'></span>
+					<span class='counter-badge' id='historyCounterBadge'>0</span>
+				</button>
+			</div>
+		</header>
+
+		<section class='toolbar-strip' id='toolConfigurationStrip' aria-label='Tool Options'></section>
+
+		<section class='disclaimer-panel' id='precisionDisclaimerBanner' role='status' aria-live='polite' hidden>
+			<div class='disclaimer-summary-row'>
+				<div class='disclaimer-headline'>
+					<span data-icon='alert-triangle'></span>
+					<span id='disclaimerSummaryText'>Irrational / Transcendental Approximation Disclaimer</span>
+				</div>
+				<button type='button' class='action-button' id='toggleDisclaimerDetailsButton' title='Show or hide exact mathematical triggers'>
+					<span id='toggleDisclaimerLabel'>Details</span>
+				</button>
+			</div>
+			<div class='disclaimer-triggers-list' id='disclaimerTriggersList' hidden></div>
+		</section>
+
+		<div class='error-toast' id='errorBanner' role='alert' aria-live='assertive' hidden></div>
+
+		<main class='workspace-grid'>
+			<section class='workspace-pane' aria-label='Input'>
+				<div class='pane-header'>
+					<div class='pane-title'>
+						<span data-icon='file-input'></span>
+						<span>Input</span>
+						<span class='info-trigger' title='Drop an SVG file anywhere or paste raw SVG or path data'>
+							<span data-icon='info'></span>
+						</span>
+					</div>
+					<div class='pane-controls'>
+						<span class='metric-label' id='inputMetricsLabel'>0 B</span>
+						<button type='button' class='action-button' id='uploadTriggerButton' title='Browse SVG File'>
+							<span data-icon='folder-open'></span>
+							<span>Open</span>
+						</button>
+						<button type='button' class='action-button' id='clearInputButton' title='Clear Input'>
+							<span data-icon='trash-2'></span>
+						</button>
+						<input type='file' id='hiddenFileInput' accept='.svg,image/svg+xml' hidden>
+					</div>
+				</div>
+				<div class='input-drop-wrapper' id='inputDropWrapper'>
+					<textarea id='svgInputTextArea' class='code-input-area' spellcheck='false' placeholder='Drop SVG file or paste code...' aria-label='SVG Input Code'></textarea>
+					<div class='drop-overlay' id='dropOverlay' aria-hidden='true'>
+						<span data-icon='upload'></span>
+						<span>Drop SVG</span>
+					</div>
+				</div>
+			</section>
+
+			<section class='workspace-pane' aria-label='Output'>
+				<div class='pane-header'>
+					<div class='pane-title'>
+						<span data-icon='file-code'></span>
+						<span>Output</span>
+						<span class='info-trigger' title='Read-only output preserving original indentation with inline red and green diff'>
+							<span data-icon='info'></span>
+						</span>
+					</div>
+					<div class='pane-controls'>
+						<span class='metric-label' id='outputMetricsLabel'>0 B</span>
+						<button type='button' class='action-button active' id='toggleDiffButton' title='Toggle Red/Green Diff'>
+							<span data-icon='git-compare'></span>
+							<span>Diff</span>
+						</button>
+						<button type='button' class='action-button' id='copyOutputButton' title='Copy Output SVG' disabled>
+							<span data-icon='copy'></span>
+							<span id='copyButtonLabel'>Copy</span>
+						</button>
+						<button type='button' class='action-button primary-action' id='downloadOutputButton' title='Download SVG' disabled>
+							<span data-icon='download'></span>
+							<span>Save</span>
+						</button>
+					</div>
+				</div>
+				<div id='codeOutputViewer' class='code-output-area' tabindex='0' role='region' aria-readonly='true' aria-label='SVG Output Code'></div>
+			</section>
+
+			<section class='workspace-pane preview-pane' aria-label='Preview'>
+				<div class='pane-header'>
+					<div class='pane-title'>
+						<span data-icon='eye'></span>
+						<span>Preview</span>
+						<span class='info-trigger' title='Visual comparison. Use Overlay to verify 100% geometric identity'>
+							<span data-icon='info'></span>
+						</span>
+					</div>
+					<div class='pane-controls'>
+						<span class='metric-label' id='viewBoxMetricsLabel'>—</span>
+						<div class='segmented-control' role='group' aria-label='Preview Mode'>
+							<button type='button' class='segment-button active' data-preview-mode='split' title='Split View'>Split</button>
+							<button type='button' class='segment-button' data-preview-mode='output' title='Result Only'>Result</button>
+							<button type='button' class='segment-button' data-preview-mode='overlay' title='Congruence Overlay'>Overlay</button>
+						</div>
+						<button type='button' class='action-button active' id='toggleAxesButton' title='Toggle (0|0) Origin Axes'>
+							<span data-icon='crosshair'></span>
+						</button>
+					</div>
+				</div>
+				<div class='preview-stage' id='previewStage' data-mode='split'>
+					<div class='canvas-slot' id='beforeCanvasSlot'>
+						<span class='slot-tag'>In</span>
+						<div class='svg-mount' id='beforeSvgMount'></div>
+					</div>
+					<div class='canvas-slot' id='afterCanvasSlot'>
+						<span class='slot-tag' id='afterSlotTag'>Out</span>
+						<div class='svg-mount' id='afterSvgMount'></div>
+					</div>
+				</div>
+			</section>
+		</main>
+	</div>
+
+	<aside class='history-drawer' id='historyDrawer' aria-label='History' aria-hidden='true'>
+		<div class='drawer-header'>
+			<div class='pane-title'>
+				<span data-icon='history'></span>
+				<span>History</span>
+			</div>
+			<div class='pane-controls'>
+				<button type='button' class='action-button' id='clearHistoryButton' title='Clear All'>
+					<span data-icon='trash-2'></span>
+				</button>
+				<button type='button' class='action-button' id='closeHistoryButton' title='Close History' aria-label='Close'>
+					<span data-icon='x'></span>
+				</button>
+			</div>
+		</div>
+		<div class='drawer-list' id='historyListContainer'></div>
+	</aside>
+
+	<script type='module' src='js/application.js'></script>
+</body>
+</html>
