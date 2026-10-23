@@ -7,17 +7,19 @@ const SCALABLE_STYLE_PROPERTY_NAMES = ['stroke-width', 'stroke-dasharray', 'stro
 
 class ExactRationalNumber {
 	constructor(numerator, denominator = 1n) {
-		if (denominator === 0n) {
+		const normalizedNumerator = typeof numerator === 'bigint' ? numerator : BigInt(numerator);
+		const normalizedDenominator = typeof denominator === 'bigint' ? denominator : BigInt(denominator);
+		if (normalizedDenominator === 0n) {
 			throw new Error('Zero denominator is not permitted in ExactRationalNumber.');
 		}
-		const signMultiplier = denominator < 0n ? -1n : 1n;
-		constsignedNumerator = numerator * signMultiplier;
-		const positiveDenominator = denominator * signMultiplier;
+		const signMultiplier = normalizedDenominator < 0n ? -1n : 1n;
+		const signedNumerator = normalizedNumerator * signMultiplier;
+		const positiveDenominator = normalizedDenominator * signMultiplier;
 		const greatestCommonDivisor = ExactRationalNumber.calculateGreatestCommonDivisor(
-			ExactRationalNumber.calculateAbsoluteBigInt(constsignedNumerator),
+			ExactRationalNumber.calculateAbsoluteBigInt(signedNumerator),
 			positiveDenominator
 		);
-		this.numerator = constsignedNumerator / greatestCommonDivisor;
+		this.numerator = signedNumerator / greatestCommonDivisor;
 		this.denominator = positiveDenominator / greatestCommonDivisor;
 	}
 
@@ -37,11 +39,14 @@ class ExactRationalNumber {
 	}
 
 	static fromNumberOrString(rawInput) {
+		if (rawInput === null || rawInput === undefined) {
+			throw new Error('Cannot parse null or undefined as ExactRationalNumber.');
+		}
 		const trimmedInput = String(rawInput).trim();
 		if (trimmedInput.length === 0) {
 			throw new Error('Cannot parse empty string as ExactRationalNumber.');
 		}
-		const scientificMatch = /^([+-]?\d+(?:\.\d+)?)[eE]([+-]?\d+)$/.exec(trimmedInput);
+		const scientificMatch = /^([+-]?(?:\d+\.?\d*|\.\d+))[eE]([+-]?\d+)$/.exec(trimmedInput);
 		if (scientificMatch) {
 			const mantissaRational = ExactRationalNumber.fromNumberOrString(scientificMatch[1]);
 			const exponentValue = parseInt(scientificMatch[2], 10);
@@ -57,8 +62,12 @@ class ExactRationalNumber {
 			throw new Error('Invalid numeric format for ExactRationalNumber: ' + trimmedInput);
 		}
 		const signCharacter = decimalMatch[1];
-		const integerDigits = decimalMatch[2] || '0';
+		const rawIntegerDigits = decimalMatch[2] || '';
 		const fractionalDigits = decimalMatch[3] || '';
+		if (rawIntegerDigits.length === 0 && fractionalDigits.length === 0) {
+			throw new Error('Invalid numeric format lacking digits for ExactRationalNumber: ' + trimmedInput);
+		}
+		const integerDigits = rawIntegerDigits || '0';
 		const combinedDigits = integerDigits + fractionalDigits;
 		const unsignedNumerator = BigInt(combinedDigits);
 		const signedNumerator = signCharacter === '-' ? -unsignedNumerator : unsignedNumerator;
@@ -120,7 +129,7 @@ class ExactRationalNumber {
 		const isNegative = this.numerator < 0n;
 		const absoluteNumerator = ExactRationalNumber.calculateAbsoluteBigInt(this.numerator);
 		const integerPart = absoluteNumerator / this.denominator;
-		let remainder = absoluteNumerator % this.denominator;
+		const remainder = absoluteNumerator % this.denominator;
 		if (remainder === 0n) {
 			return (isNegative ? '-' : '') + integerPart.toString();
 		}
@@ -443,6 +452,47 @@ function hasExplicitCoordinatesForEveryCharacter(textElement) {
 	return true;
 }
 
+function applyResidualTextTransformAttribute(textElement, matrixComponents, decompositionMetrics, scaleFactorRational, rotationAngleDegreesRational) {
+	const zeroRational = new ExactRationalNumber(0n, 1n);
+	const pivotPoint = transformPointWithRationalComponents(zeroRational, zeroRational, matrixComponents);
+	if (decompositionMetrics.isConformalOrientationPreserving && !rotationAngleDegreesRational.isZero()) {
+		const rotateTransformString =
+			'rotate(' +
+			rotationAngleDegreesRational.toDecimalString() +
+			' ' +
+			pivotPoint.horizontal.toDecimalString() +
+			' ' +
+			pivotPoint.vertical.toDecimalString() +
+			')';
+		textElement.setAttribute('transform', rotateTransformString);
+		return;
+	}
+	if (!decompositionMetrics.isConformalOrientationPreserving) {
+		const normalizedComponentA = matrixComponents.componentA.divide(scaleFactorRational);
+		const normalizedComponentB = matrixComponents.componentB.divide(scaleFactorRational);
+		const normalizedComponentC = matrixComponents.componentC.divide(scaleFactorRational);
+		const normalizedComponentD = matrixComponents.componentD.divide(scaleFactorRational);
+		const residualTranslationX = pivotPoint.horizontal.subtract(
+			normalizedComponentA.multiply(pivotPoint.horizontal).add(normalizedComponentC.multiply(pivotPoint.vertical))
+		);
+		const residualTranslationY = pivotPoint.vertical.subtract(
+			normalizedComponentB.multiply(pivotPoint.horizontal).add(normalizedComponentD.multiply(pivotPoint.vertical))
+		);
+		const residualMatrixString =
+			'matrix(' +
+			[
+				normalizedComponentA.toDecimalString(),
+				normalizedComponentB.toDecimalString(),
+				normalizedComponentC.toDecimalString(),
+				normalizedComponentD.toDecimalString(),
+				residualTranslationX.toDecimalString(),
+				residualTranslationY.toDecimalString()
+			].join(',') +
+			')';
+		textElement.setAttribute('transform', residualMatrixString);
+	}
+}
+
 function transformTextElementSubtree(textElement, localMatrix, options) {
 	const matrixComponents = extractRationalMatrixComponents(localMatrix);
 	if (isIdentityMatrixComponents(matrixComponents)) {
@@ -493,42 +543,13 @@ function transformTextElementSubtree(textElement, localMatrix, options) {
 	}
 
 	if (!canBakeRotationIntoGlyphs) {
-		const zeroRational = new ExactRationalNumber(0n, 1n);
-		const pivotPoint = transformPointWithRationalComponents(zeroRational, zeroRational, matrixComponents);
-		if (decompositionMetrics.isConformalOrientationPreserving && !rotationAngleDegreesRational.isZero()) {
-			const rotateTransformString =
-				'rotate(' +
-				rotationAngleDegreesRational.toDecimalString() +
-				' ' +
-				pivotPoint.horizontal.toDecimalString() +
-				' ' +
-				pivotPoint.vertical.toDecimalString() +
-				')';
-			textElement.setAttribute('transform', rotateTransformString);
-		} else if (!decompositionMetrics.isConformalOrientationPreserving) {
-			const normalizedComponentA = matrixComponents.componentA.divide(scaleFactorRational);
-			const normalizedComponentB = matrixComponents.componentB.divide(scaleFactorRational);
-			const normalizedComponentC = matrixComponents.componentC.divide(scaleFactorRational);
-			const normalizedComponentD = matrixComponents.componentD.divide(scaleFactorRational);
-			const residualTranslationX = pivotPoint.horizontal.subtract(
-				normalizedComponentA.multiply(pivotPoint.horizontal).add(normalizedComponentC.multiply(pivotPoint.vertical))
-			);
-			const residualTranslationY = pivotPoint.vertical.subtract(
-				normalizedComponentB.multiply(pivotPoint.horizontal).add(normalizedComponentD.multiply(pivotPoint.vertical))
-			);
-			const residualMatrixString =
-				'matrix(' +
-				[
-					normalizedComponentA.toDecimalString(),
-					normalizedComponentB.toDecimalString(),
-					normalizedComponentC.toDecimalString(),
-					normalizedComponentD.toDecimalString(),
-					residualTranslationX.toDecimalString(),
-					residualTranslationY.toDecimalString()
-				].join(',') +
-				')';
-			textElement.setAttribute('transform', residualMatrixString);
-		}
+		applyResidualTextTransformAttribute(
+			textElement,
+			matrixComponents,
+			decompositionMetrics,
+			scaleFactorRational,
+			rotationAngleDegreesRational
+		);
 	}
 }
 
@@ -647,9 +668,19 @@ function normalizeClipPathContentsRecursively(currentNode, accumulatedMatrix, pa
 	}
 }
 
+function findClipPathElementByIdentifier(svgRootElement, clipPathIdentifier) {
+	const candidateElements = svgRootElement.querySelectorAll('clipPath, clippath');
+	for (const candidateElement of Array.from(candidateElements)) {
+		if (candidateElement.getAttribute('id') === clipPathIdentifier) {
+			return candidateElement;
+		}
+	}
+	return null;
+}
+
 function synchronizeReferencedClipPaths(svgRootElement, clipPathUsageRegistry, parsedDocument, options) {
 	for (const [clipPathIdentifier, usageEntries] of clipPathUsageRegistry.entries()) {
-		const originalClipPathElement = svgRootElement.querySelector('clipPath[id="' + clipPathIdentifier + '"]');
+		const originalClipPathElement = findClipPathElementByIdentifier(svgRootElement, clipPathIdentifier);
 		if (!originalClipPathElement) {
 			continue;
 		}
@@ -670,12 +701,13 @@ function synchronizeReferencedClipPaths(svgRootElement, clipPathUsageRegistry, p
 			groupedByMatrixKey.get(matrixKey).elements.push(usageEntry.referencingElement);
 		}
 
+		const unmodifiedClipPathTemplate = originalClipPathElement.cloneNode(true);
 		let groupIndex = 0;
 		for (const matrixGroup of groupedByMatrixKey.values()) {
 			if (groupIndex === 0) {
 				normalizeClipPathContentsRecursively(originalClipPathElement, matrixGroup.matrix, parsedDocument, options);
 			} else {
-				const clonedClipPathElement = originalClipPathElement.cloneNode(true);
+				const clonedClipPathElement = unmodifiedClipPathTemplate.cloneNode(true);
 				const clonedIdentifier = clipPathIdentifier + '_flattened_' + groupIndex;
 				clonedClipPathElement.setAttribute('id', clonedIdentifier);
 				originalClipPathElement.parentNode.insertBefore(clonedClipPathElement, originalClipPathElement.nextSibling);
@@ -747,16 +779,20 @@ export const flattenTransformsToolDefinition = {
 		preserveTextRotationAsTransform: false
 	},
 	executeOnDom(svgRootElement, parsedDocument, options) {
+		const resolvedOptions = {
+			...flattenTransformsToolDefinition.defaultOptions,
+			...(options || {})
+		};
 		const clipPathUsageRegistry = new Map();
 		const referencedIdentifiers = collectAllReferencedElementIdentifiers(svgRootElement);
 		normalizeElementNodeRecursively(
 			svgRootElement,
 			AffineTransformationMatrix.createIdentityMatrix(),
 			parsedDocument,
-			options,
+			resolvedOptions,
 			clipPathUsageRegistry,
 			referencedIdentifiers
 		);
-		synchronizeReferencedClipPaths(svgRootElement, clipPathUsageRegistry, parsedDocument, options);
+		synchronizeReferencedClipPaths(svgRootElement, clipPathUsageRegistry, parsedDocument, resolvedOptions);
 	}
 };
