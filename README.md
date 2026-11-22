@@ -1,4 +1,4 @@
-# SVG Cleaner&#x24B7;
+# SVG Cleaner<sup>Ⓑ</sup>
 
 AI Label: B-[{C}](https://mebebruno.github.io/BrunosAILabelSystem/explain.html?code)
 
